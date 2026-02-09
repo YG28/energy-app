@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a1a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>能源管理系統</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg-dark: #0a0a1a;
+  --bg-light: #1a1a2e;
+  --primary: #00d4aa;
+  --blue: #4facfe;
+  --orange: #f5a623;
+  --green: #00c853;
+  --red: #ff5252;
+  --card: rgba(255,255,255,0.05);
+  --card-border: rgba(255,255,255,0.08);
+  --text: #e0e0e0;
+  --text-dim: rgba(255,255,255,0.5);
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: linear-gradient(180deg, var(--bg-dark), var(--bg-light));
+  color: var(--text);
+  min-height: 100vh;
+  max-width: 430px;
+  margin: 0 auto;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Safe area for Android status bar */
+html {
+  padding-top: env(safe-area-inset-top, 0px);
+  background: #0a0a1a;
+}
+
+/* Scrollable content area */
+.app-content {
+  padding: 16px 16px 90px;
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  min-height: 100vh;
+}
+
+/* Page transitions */
+.page { display: none; animation: fadeIn 0.3s ease; }
+.page.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Cards */
+.card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 14px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Header */
+.header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 20px; padding-top: 8px;
+}
+.header-left .greeting { font-size: 20px; font-weight: 700; }
+.header-left .date { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.header-right .notif-btn {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--card); border: 1px solid var(--card-border);
+  color: var(--text); font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+.notif-dot {
+  width: 8px; height: 8px; background: var(--red);
+  border-radius: 50%; position: absolute; top: 8px; right: 9px;
+}
+
+/* Power ring card */
+.power-card {
+  text-align: center; padding: 24px 16px;
+}
+.power-ring-wrap {
+  position: relative; width: 160px; height: 160px; margin: 0 auto 16px;
+}
+.power-ring-wrap canvas { width: 160px !important; height: 160px !important; }
+.power-value {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  text-align: center;
+}
+.power-value .num { font-size: 36px; font-weight: 700; color: #fff; }
+.power-value .unit { font-size: 13px; color: var(--text-dim); }
+.power-label { font-size: 13px; color: var(--text-dim); }
+
+/* Stats row */
+.stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+.stat-card {
+  background: var(--card); border: 1px solid var(--card-border);
+  border-radius: 14px; padding: 14px 10px; text-align: center;
+  backdrop-filter: blur(20px);
+}
+.stat-icon { font-size: 22px; margin-bottom: 6px; }
+.stat-val { font-size: 20px; font-weight: 700; color: #fff; }
+.stat-label { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+/* Energy flow */
+.flow-card { padding: 18px 12px; }
+.flow-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 14px; }
+.flow-diagram {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0;
+}
+.flow-node {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  flex: 0 0 70px;
+}
+.flow-icon {
+  width: 48px; height: 48px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+}
+.flow-icon.solar { background: rgba(245,166,35,0.15); }
+.flow-icon.battery { background: rgba(0,200,83,0.15); }
+.flow-icon.home { background: rgba(79,172,254,0.15); }
+.flow-name { font-size: 11px; color: var(--text-dim); }
+.flow-val { font-size: 12px; font-weight: 600; }
+.flow-arrow {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  position: relative; height: 2px;
+}
+.flow-arrow::before {
+  content: ''; position: absolute; width: 100%; height: 2px;
+  background: linear-gradient(90deg, var(--primary), var(--blue));
+  border-radius: 1px;
+}
+.flow-arrow::after {
+  content: ''; position: absolute; right: 0;
+  width: 0; height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 8px solid var(--blue);
+}
+/* Animated dot on flow arrows */
+.flow-arrow .dot {
+  position: absolute; width: 6px; height: 6px;
+  background: var(--primary); border-radius: 50%;
+  box-shadow: 0 0 8px var(--primary);
+  animation: flowDot 2s linear infinite;
+}
+@keyframes flowDot { 0% { left: 0; } 100% { left: calc(100% - 6px); } }
+
+/* Chart card */
+.chart-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+.chart-wrap { position: relative; height: 180px; }
+
+/* ========== DEVICES PAGE ========== */
+.scene-row { display: flex; gap: 10px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px; }
+.scene-btn {
+  flex-shrink: 0; padding: 10px 18px; border-radius: 12px;
+  background: var(--card); border: 1px solid var(--card-border);
+  color: var(--text); font-size: 13px; cursor: pointer;
+  white-space: nowrap; transition: all 0.2s;
+}
+.scene-btn.active {
+  background: linear-gradient(135deg, var(--primary), var(--blue));
+  border-color: transparent; color: #fff; font-weight: 600;
+}
+
+.room-section { margin-bottom: 18px; }
+.room-title { font-size: 15px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.device-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.device-card {
+  background: var(--card); border: 1px solid var(--card-border);
+  border-radius: 14px; padding: 14px; backdrop-filter: blur(20px);
+  transition: all 0.3s;
+}
+.device-card.on { border-color: rgba(0,212,170,0.3); background: rgba(0,212,170,0.06); }
+.device-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+.device-icon { font-size: 26px; }
+.device-name { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.device-power { font-size: 11px; color: var(--text-dim); }
+.device-control { margin-top: 8px; }
+
+/* Toggle switch */
+.toggle {
+  width: 44px; height: 24px; border-radius: 12px;
+  background: rgba(255,255,255,0.15); position: relative;
+  cursor: pointer; transition: background 0.3s;
+}
+.toggle.on { background: var(--primary); }
+.toggle .knob {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; position: absolute; top: 2px; left: 2px;
+  transition: transform 0.3s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.toggle.on .knob { transform: translateX(20px); }
+
+/* Slider */
+.slider-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.slider-row span { font-size: 11px; color: var(--text-dim); min-width: 28px; text-align: right; }
+input[type=range] {
+  -webkit-appearance: none; appearance: none;
+  flex: 1; height: 4px; border-radius: 2px;
+  background: rgba(255,255,255,0.15); outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--primary); cursor: pointer;
+  box-shadow: 0 0 6px rgba(0,212,170,0.5);
+}
+
+/* Temp control */
+.temp-control { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.temp-btn {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(255,255,255,0.1); border: none;
+  color: #fff; font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.temp-val { font-size: 18px; font-weight: 700; color: var(--primary); }
+
+/* ========== ANALYSIS PAGE ========== */
+.time-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+.time-tab {
+  flex: 1; padding: 8px; border-radius: 10px; text-align: center;
+  background: var(--card); border: 1px solid var(--card-border);
+  color: var(--text-dim); font-size: 13px; cursor: pointer;
+  transition: all 0.2s;
+}
+.time-tab.active {
+  background: linear-gradient(135deg, var(--primary), var(--blue));
+  border-color: transparent; color: #fff; font-weight: 600;
+}
+
+.cost-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+.cost-card {
+  background: var(--card); border: 1px solid var(--card-border);
+  border-radius: 14px; padding: 14px 10px; text-align: center;
+  backdrop-filter: blur(20px);
+}
+.cost-val { font-size: 20px; font-weight: 700; color: #fff; }
+.cost-label { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.cost-change { font-size: 11px; margin-top: 4px; }
+.cost-change.up { color: var(--red); }
+.cost-change.down { color: var(--green); }
+
+.pie-wrap { position: relative; height: 200px; margin-bottom: 12px; }
+
+.tip-card {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 14px; margin-bottom: 8px;
+}
+.tip-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: rgba(0,212,170,0.1); display: flex;
+  align-items: center; justify-content: center; font-size: 18px;
+  flex-shrink: 0;
+}
+.tip-text { font-size: 13px; line-height: 1.5; }
+.tip-title { font-weight: 600; margin-bottom: 2px; font-size: 13px; }
+
+/* ========== BOTTOM NAV ========== */
+.bottom-nav {
+  position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 430px;
+  background: rgba(10,10,26,0.95);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--card-border);
+  display: flex; padding: 8px 0 env(safe-area-inset-bottom, 12px);
+  z-index: 100;
+}
+.nav-item {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; gap: 3px; padding: 6px 0;
+  color: var(--text-dim); font-size: 11px;
+  cursor: pointer; transition: color 0.2s;
+  background: none; border: none;
+}
+.nav-item .nav-icon { font-size: 22px; transition: transform 0.2s; }
+.nav-item.active { color: var(--primary); }
+.nav-item.active .nav-icon { transform: scale(1.1); }
+
+/* Number animation helper */
+.num-animate { transition: all 0.3s; }
+
+/* Section title */
+.section-title { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+</style>
+</head>
+<body>
+
+<div class="app-content">
+  <!-- ========== DASHBOARD ========== -->
+  <div class="page active" id="page-dashboard">
+    <div class="header">
+      <div class="header-left">
+        <div class="greeting">早安，家恩 👋</div>
+        <div class="date" id="current-date"></div>
+      </div>
+      <div class="header-right">
+        <button class="notif-btn">🔔<span class="notif-dot"></span></button>
+      </div>
+    </div>
+
+    <div class="card power-card">
+      <div class="power-ring-wrap">
+        <canvas id="powerRing"></canvas>
+        <div class="power-value">
+          <div class="num" id="powerNum">3.2</div>
+          <div class="unit">kW</div>
+        </div>
+      </div>
+      <div class="power-label">即時用電功率</div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-icon">☀️</div>
+        <div class="stat-val" style="color:var(--orange)">12.4</div>
+        <div class="stat-label">太陽能 kWh</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">🔋</div>
+        <div class="stat-val" style="color:var(--green)">78%</div>
+        <div class="stat-label">電池儲能</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">⚡</div>
+        <div class="stat-val" style="color:var(--blue)">18.6</div>
+        <div class="stat-label">今日用電 kWh</div>
+      </div>
+    </div>
+
+    <div class="card flow-card">
+      <h3>能源流向</h3>
+      <div class="flow-diagram">
+        <div class="flow-node">
+          <div class="flow-icon solar">☀️</div>
+          <div class="flow-name">太陽能</div>
+          <div class="flow-val" style="color:var(--orange)">4.1 kW</div>
+        </div>
+        <div class="flow-arrow"><span class="dot"></span></div>
+        <div class="flow-node">
+          <div class="flow-icon battery">🔋</div>
+          <div class="flow-name">電池</div>
+          <div class="flow-val" style="color:var(--green)">78%</div>
+        </div>
+        <div class="flow-arrow"><span class="dot"></span></div>
+        <div class="flow-node">
+          <div class="flow-icon home">🏠</div>
+          <div class="flow-name">家庭</div>
+          <div class="flow-val" style="color:var(--blue)">3.2 kW</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card chart-card">
+      <h3>今日用電趨勢</h3>
+      <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ========== DEVICES ========== -->
+  <div class="page" id="page-devices">
+    <div class="header">
+      <div class="header-left">
+        <div class="greeting">設備控制</div>
+        <div class="date">12 個設備已連線</div>
+      </div>
+    </div>
+
+    <div class="scene-row">
+      <button class="scene-btn active" onclick="setScene(this)">🏠 舒適模式</button>
+      <button class="scene-btn" onclick="setScene(this)">🌿 節能模式</button>
+      <button class="scene-btn" onclick="setScene(this)">🚪 離家模式</button>
+    </div>
+
+    <!-- 客廳 -->
+    <div class="room-section">
+      <div class="room-title">🛋️ 客廳</div>
+      <div class="device-grid">
+        <div class="device-card on">
+          <div class="device-top">
+            <div><div class="device-icon">💡</div></div>
+            <div class="toggle on" onclick="toggleDevice(this)"><div class="knob"></div></div>
+          </div>
+          <div class="device-name">主燈</div>
+          <div class="device-power">85W</div>
+          <div class="device-control">
+            <div class="slider-row">
+              <span>🔅</span>
+              <input type="range" min="0" max="100" value="80" oninput="this.nextElementSibling.textContent=this.value+'%'">
+              <span>80%</span>
+            </div>
+          </div>
+        </div>
+        <div class="device-card on">
+          <div class="device-top">
+            <div><div class="device-icon">❄️</div></div>
+            <div class="toggle on" onclick="toggleDevice(this)"><div class="knob"></div></div>
+          </div>
+          <div class="device-name">冷氣</div>
+          <div class="device-power">1200W</div>
+          <div class="device-control">
+            <div class="temp-control">
+              <button class="temp-btn" onclick="adjustTemp(this,-1)">−</button>
+              <span class="temp-val">24°C</span>
+              <button class="temp-btn" onclick="adjustTemp(this,1)">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="device-card">
+          <div class="device-top">
+            <div><div class="device-icon">📺</div></div>
+            <div class="toggle" onclick="toggleDevice(this)"><div class="knob"></div></div>
+          </div>
+          <div class="device-name">電視</div>
+          <div class="device-power">待機中</div>
+        </div>
+        <div class="device-card on">
+          <div class="device-top">
+            <div><div class="device-icon">🔊</div></div>
+            <div class="toggle on" onclick="toggleDevice(this)"><div class="knob"></div></div>
+          </div>
+          <div class="device-name">智慧音箱</div>
+          <div class="device-power">10W</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 臥室 -->
+    <div class="room-section">
+      <div class="room-title">🛏️ 臥室</div>
+      <div class="device-grid">
+        <div class="device-card">
+          <div class="device-top">
+            <div><div class="device-icon">💡</div></div>
+            <div class="toggle" onclick="toggleDevice(this)"><div class="knob"></div></div>
+          </div>
+          <div class="device-name">床頭燈</div>
+          <div class="device-power">待機中</div>
+          <div class="device-control">
+            <div class="slider-row">
+              <span>🔅</span>
+              <input type="range" min="0" max="100" value="0" oninput="this.nextElementSibling.textContent=this.value+'%'">
+              <span>0%</span>
+            </div>
+          </div>
+        </div>
+        <div class="device-card on">
+          <div class="device-top">
+            <div><div class="device-icon">❄️</div></div>
+            <div class="toggle on" onclick="toggleDevice(this)"><div class="knob"></div></div>
+          </div>
+          <div class="device-name">臥室冷氣</div>
+          <div class="device-power">900W</div>
+          <div class="device-control">
+            <div class="temp-control">
+              <button class="temp-btn" onclick="adjustTemp(this,-1)">−</button>
+              <span class="temp-val">26°C</span>
+              <button class="temp-btn" onclick="adjustTemp(this,1)">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 廚房 -->
+    <div class="room-section">
+      <div class="room-title">🍳 廚房</div>
+      <div class="device-grid">
+        <div class="device-card on">
+          <div class="device-top">
+            <div><div class="device-icon">🧊</div></div>
+            <div class="toggle on" onclick="toggleDevice(this)"><div class="knob"></div></div>
+          </div>
+          <div class="device-name">冰箱</div>
+          <div class="device-power">150W</div>
+        </div>
+        <div class="device-card">
+          <div class="device-top">
+            <div><div class="device-icon">🫖</div></div>
+            <div class="toggle" onclick="toggleDevice(this)"><div class="knob"></div></div>
+          </div>
+          <div class="device-name">電熱水壺</div>
+          <div class="device-power">待機中</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 浴室 -->
+    <div class="room-section">
+      <div class="room-title">🚿 浴室</div>
+      <div class="device-grid">
+        <div class="device-card">
+          <div class="device-top">
+            <div><div class="device-icon">💡</div></div>
+            <div class="toggle" onclick="toggleDevice(this)"><div class="knob"></div></div>
+          </div>
+          <div class="device-name">浴室燈</div>
+          <div class="device-power">待機中</div>
+        </div>
+        <div class="device-card on">
+          <div class="device-top">
+            <div><div class="device-icon">🌀</div></div>
+            <div class="toggle on" onclick="toggleDevice(this)"><div class="knob"></div></div>
+          </div>
+          <div class="device-name">排風扇</div>
+          <div class="device-power">35W</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== ANALYSIS ========== -->
+  <div class="page" id="page-analysis">
+    <div class="header">
+      <div class="header-left">
+        <div class="greeting">用電分析</div>
+        <div class="date">深入了解您的用電模式</div>
+      </div>
+    </div>
+
+    <div class="time-tabs">
+      <button class="time-tab active" onclick="setTimeTab(this,'day')">日</button>
+      <button class="time-tab" onclick="setTimeTab(this,'week')">週</button>
+      <button class="time-tab" onclick="setTimeTab(this,'month')">月</button>
+    </div>
+
+    <div class="cost-row">
+      <div class="cost-card">
+        <div class="cost-val">$2,847</div>
+        <div class="cost-label">本月電費</div>
+        <div class="cost-change up">▲ 8.2%</div>
+      </div>
+      <div class="cost-card">
+        <div class="cost-val">$2,631</div>
+        <div class="cost-label">上月電費</div>
+        <div class="cost-change down">▼ 3.1%</div>
+      </div>
+      <div class="cost-card">
+        <div class="cost-val" style="color:var(--green)">$384</div>
+        <div class="cost-label">太陽能節省</div>
+        <div class="cost-change down">▼ 12.5%</div>
+      </div>
+    </div>
+
+    <div class="card chart-card">
+      <h3>用電量分析</h3>
+      <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+    </div>
+
+    <div class="card chart-card">
+      <h3>用電分類</h3>
+      <div class="pie-wrap"><canvas id="pieChart"></canvas></div>
+    </div>
+
+    <div class="section-title">💡 節能建議</div>
+    <div class="card tip-card">
+      <div class="tip-icon">🌡️</div>
+      <div>
+        <div class="tip-title">調高冷氣溫度</div>
+        <div class="tip-text">建議將冷氣溫度調至 26°C，每提高 1°C 可省約 6% 電費，預估每月可省 $170。</div>
+      </div>
+    </div>
+    <div class="card tip-card">
+      <div class="tip-icon">⏰</div>
+      <div>
+        <div class="tip-title">善用離峰時段</div>
+        <div class="tip-text">將洗衣機、烘衣機等高耗電設備改在離峰時段（22:00-06:00）使用，可享較低電價。</div>
+      </div>
+    </div>
+    <div class="card tip-card">
+      <div class="tip-icon">☀️</div>
+      <div>
+        <div class="tip-title">增加太陽能使用</div>
+        <div class="tip-text">上週太陽能自用率僅 62%，建議將高耗電活動集中在日間，提升太陽能利用效率。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom Navigation -->
+<nav class="bottom-nav">
+  <button class="nav-item active" onclick="switchTab('dashboard',this)">
+    <span class="nav-icon">📊</span><span>儀表板</span>
+  </button>
+  <button class="nav-item" onclick="switchTab('devices',this)">
+    <span class="nav-icon">🔌</span><span>設備</span>
+  </button>
+  <button class="nav-item" onclick="switchTab('analysis',this)">
+    <span class="nav-icon">📈</span><span>分析</span>
+  </button>
+</nav>
+
+<script>
+// ===== Navigation =====
+function switchTab(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ===== Date =====
+function updateDate() {
+  const now = new Date();
+  const opts = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+  document.getElementById('current-date').textContent = now.toLocaleDateString('zh-TW', opts);
+}
+updateDate();
+
+// ===== Device toggle =====
+function toggleDevice(el) {
+  el.classList.toggle('on');
+  const card = el.closest('.device-card');
+  card.classList.toggle('on');
+  const powerEl = card.querySelector('.device-power');
+  if (!el.classList.contains('on')) {
+    powerEl.dataset.prev = powerEl.textContent;
+    powerEl.textContent = '待機中';
+  } else {
+    powerEl.textContent = powerEl.dataset.prev || '運行中';
+  }
+}
+
+// ===== Temperature =====
+function adjustTemp(btn, delta) {
+  const valEl = btn.parentElement.querySelector('.temp-val');
+  let temp = parseInt(valEl.textContent);
+  temp = Math.max(16, Math.min(30, temp + delta));
+  valEl.textContent = temp + '°C';
+}
+
+// ===== Scene =====
+function setScene(el) {
+  document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ===== Time tab =====
+function setTimeTab(el, period) {
+  document.querySelectorAll('.time-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  updateBarChart(period);
+}
+
+// ===== Chart defaults =====
+Chart.defaults.color = 'rgba(255,255,255,0.5)';
+Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, sans-serif';
+Chart.defaults.font.size = 11;
+
+// ===== Power Ring =====
+new Chart(document.getElementById('powerRing'), {
+  type: 'doughnut',
+  data: {
+    datasets: [{
+      data: [3.2, 6.8],
+      backgroundColor: [
+        (function() {
+          const c = document.getElementById('powerRing').getContext('2d');
+          const g = c.createLinearGradient(0, 0, 160, 0);
+          g.addColorStop(0, '#00d4aa');
+          g.addColorStop(1, '#4facfe');
+          return g;
+        })(),
+        'rgba(255,255,255,0.05)'
+      ],
+      borderWidth: 0,
+      borderRadius: 8,
+    }]
+  },
+  options: {
+    cutout: '78%',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+    animation: { animateRotate: true, duration: 1200 }
+  }
+});
+
+// ===== Trend Chart =====
+const hours = Array.from({ length: 24 }, (_, i) => i + ':00');
+const trendData = [1.2,0.8,0.6,0.5,0.5,0.7,1.5,2.8,3.5,3.2,2.9,2.6,2.4,2.5,2.7,3.0,3.8,4.2,4.5,4.0,3.6,3.2,2.5,1.8];
+
+new Chart(document.getElementById('trendChart'), {
+  type: 'line',
+  data: {
+    labels: hours,
+    datasets: [{
+      data: trendData,
+      borderColor: '#00d4aa',
+      backgroundColor: (function() {
+        const c = document.getElementById('trendChart').getContext('2d');
+        const g = c.createLinearGradient(0, 0, 0, 180);
+        g.addColorStop(0, 'rgba(0,212,170,0.3)');
+        g.addColorStop(1, 'rgba(0,212,170,0)');
+        return g;
+      })(),
+      fill: true,
+      tension: 0.4,
+      borderWidth: 2,
+      pointRadius: 0,
+      pointHitRadius: 10,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false }, ticks: { maxTicksLimit: 6 } },
+      y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { callback: v => v + 'kW' } }
+    },
+    interaction: { intersect: false, mode: 'index' },
+  }
+});
+
+// ===== Bar Chart =====
+let barChart;
+const barData = {
+  day: { labels: ['0-4','4-8','8-12','12-16','16-20','20-24'], data: [2.1,4.2,7.8,6.5,9.2,5.8] },
+  week: { labels: ['一','二','三','四','五','六','日'], data: [18.5,22.1,19.8,24.3,21.7,28.5,25.2] },
+  month: { labels: ['1月','2月','3月','4月','5月','6月'], data: [580,520,490,530,510,485] },
+};
+
+function createBarChart(period) {
+  const d = barData[period];
+  barChart = new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+      labels: d.labels,
+      datasets: [{
+        data: d.data,
+        backgroundColor: (function() {
+          const c = document.getElementById('barChart').getContext('2d');
+          const g = c.createLinearGradient(0, 0, 0, 180);
+          g.addColorStop(0, '#4facfe');
+          g.addColorStop(1, '#00d4aa');
+          return g;
+        })(),
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false } },
+        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { callback: v => v + 'kWh' } }
+      }
+    }
+  });
+}
+function updateBarChart(period) {
+  const d = barData[period];
+  barChart.data.labels = d.labels;
+  barChart.data.datasets[0].data = d.data;
+  barChart.update();
+}
+createBarChart('day');
+
+// ===== Pie Chart =====
+new Chart(document.getElementById('pieChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['冷氣空調', '照明', '廚房家電', '娛樂設備', '其他'],
+    datasets: [{
+      data: [42, 18, 15, 14, 11],
+      backgroundColor: ['#4facfe', '#f5a623', '#00d4aa', '#ff6b9d', '#a78bfa'],
+      borderWidth: 0,
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    cutout: '55%',
+    plugins: {
+      legend: {
+        position: 'right',
+        labels: {
+          padding: 12,
+          usePointStyle: true,
+          pointStyleWidth: 10,
+          font: { size: 12 },
+          generateLabels: function(chart) {
+            const data = chart.data;
+            return data.labels.map((label, i) => ({
+              text: label + ' ' + data.datasets[0].data[i] + '%',
+              fillStyle: data.datasets[0].backgroundColor[i],
+              strokeStyle: 'transparent',
+              pointStyle: 'circle',
+              index: i,
+            }));
+          }
+        }
+      },
+      tooltip: {
+        callbacks: { label: ctx => ctx.label + ': ' + ctx.parsed + '%' }
+      }
+    }
+  }
+});
+
+// ===== Animate numbers on load =====
+function animateValue(el, start, end, duration, suffix) {
+  const startTime = performance.now();
+  const isFloat = String(end).includes('.');
+  function update(currentTime) {
+    const elapsed = currentTime - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = start + (end - start) * eased;
+    el.textContent = isFloat ? current.toFixed(1) : Math.round(current);
+    if (suffix) el.textContent += suffix;
+    if (progress < 1) requestAnimationFrame(update);
+  }
+  requestAnimationFrame(update);
+}
+
+// Animate power number
+setTimeout(() => animateValue(document.getElementById('powerNum'), 0, 3.2, 1200), 300);
+
+// ===== Simulate live power updates =====
+setInterval(() => {
+  const el = document.getElementById('powerNum');
+  const base = 3.2;
+  const variation = (Math.random() - 0.5) * 0.4;
+  const newVal = (base + variation).toFixed(1);
+  el.textContent = newVal;
+}, 5000);
+
+// ===== Capacitor Integration =====
+// Handle Android back button
+document.addEventListener('backbutton', function() {
+  const activePage = document.querySelector('.page.active');
+  if (activePage.id !== 'page-dashboard') {
+    switchTab('dashboard', document.querySelector('.nav-item'));
+  }
+});
+
+// Disable long press context menu on mobile
+document.addEventListener('contextmenu', e => e.preventDefault());
+</script>
+</body>
+</html>

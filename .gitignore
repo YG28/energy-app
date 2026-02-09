@@ -7,3 +7,4 @@ android/local.properties
 *.apk
 *.keystore
 .DS_Store
+*.jpg
