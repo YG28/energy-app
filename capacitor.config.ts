@@ -1,0 +1,31 @@
+import type { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'com.energy.manager',
+  appName: '能源管理',
+  webDir: 'www',
+  server: {
+    androidScheme: 'https'
+  },
+  plugins: {
+    StatusBar: {
+      backgroundColor: '#0a0a1a',
+      style: 'DARK',
+      overlaysWebView: false
+    },
+    SplashScreen: {
+      launchAutoHide: true,
+      launchShowDuration: 1500,
+      backgroundColor: '#0a0a1a',
+      showSpinner: false
+    }
+  },
+  android: {
+    backgroundColor: '#0a0a1a',
+    allowMixedContent: true,
+    captureInput: true,
+    webContentsDebuggingEnabled: true
+  }
+};
+
+export default config;
