@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">能源管理</string>
-    <string name="title_activity_main">能源管理</string>
+    <string name="app_name">Guts能源管理測試APP</string>
+    <string name="title_activity_main">Guts能源管理測試APP</string>
     <string name="package_name">com.energy.manager</string>
     <string name="custom_url_scheme">com.energy.manager</string>
 </resources>

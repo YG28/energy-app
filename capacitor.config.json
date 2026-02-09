@@ -1,6 +1,6 @@
 {
   "appId": "com.energy.manager",
-  "appName": "能源管理",
+  "appName": "Guts能源管理測試APP",
   "webDir": "www",
   "server": {
     "androidScheme": "https"
